@@ -1,6 +1,8 @@
 package be.nabu.libs.types.mask;
 
 import java.util.Collection;
+import java.util.HashSet;
+import java.util.Set;
 
 import be.nabu.libs.types.BaseTypeInstance;
 import be.nabu.libs.types.CollectionHandlerFactory;
@@ -17,9 +19,10 @@ import be.nabu.libs.types.api.SimpleType;
 
 public class MaskedContent implements ComplexContent {
 
-	private ComplexContent original;
+	private ComplexContent original, newInstance;
 	private ComplexType targetType;
 	private boolean allowUndefinedAccess = true;
+	private Set<String> elementsSet = new HashSet<String>();
 
 	public MaskedContent(ComplexContent original, ComplexType targetType) {
 		this.original = original;
@@ -33,7 +36,16 @@ public class MaskedContent implements ComplexContent {
 
 	@Override
 	public void set(String path, Object value) {
-		original.set(path, value);
+		if (newInstance == null) {
+			synchronized(this) {
+				if (newInstance == null) {
+					newInstance = targetType.newInstance();
+				}
+			}
+		}
+		// we actively updated this field, mark it so don't request it from the original anymore
+		elementsSet.add(new ParsedPath(path).getName());
+		newInstance.set(path, value);
 	}
 
 	@SuppressWarnings({ "unchecked", "rawtypes" })
@@ -47,7 +59,12 @@ public class MaskedContent implements ComplexContent {
 		}
 		Object value = null;
 		if (element != null || allowUndefinedAccess) {
-			value = original.get(parsedPath.getName());
+			if (newInstance != null) {
+				value = newInstance.get(parsedPath.getName());
+			}
+			if (value == null && !elementsSet.contains(parsedPath.getName())) {
+				value = original.get(parsedPath.getName());
+			}
 		}
 		if (value != null) {
 			CollectionHandlerProvider collectionHandler = CollectionHandlerFactory.getInstance().getHandler().getHandler(value.getClass());
