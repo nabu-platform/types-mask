@@ -10,6 +10,7 @@ import be.nabu.libs.types.ComplexContentWrapperFactory;
 import be.nabu.libs.types.ParsedPath;
 import be.nabu.libs.types.SimpleTypeWrapperFactory;
 import be.nabu.libs.types.TypeConverterFactory;
+import be.nabu.libs.types.TypeUtils;
 import be.nabu.libs.types.api.CollectionHandlerProvider;
 import be.nabu.libs.types.api.ComplexContent;
 import be.nabu.libs.types.api.ComplexType;
@@ -106,6 +107,9 @@ public class MaskedContent implements ComplexContent {
 		if (value != null && element != null && element.getType() instanceof ComplexType) {
 			if (!(value instanceof ComplexContent)) {
 				value = ComplexContentWrapperFactory.getInstance().getWrapper().wrap(value);
+			}
+			if (((ComplexContent) value).getType().equals(element.getType()) || !TypeUtils.getUpcastPath(((ComplexContent) value).getType(), element.getType()).isEmpty()) {
+				return value;
 			}
 			value = new MaskedContent((ComplexContent) value, (ComplexType) element.getType());
 		}
