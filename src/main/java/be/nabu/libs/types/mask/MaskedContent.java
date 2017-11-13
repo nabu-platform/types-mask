@@ -64,7 +64,11 @@ public class MaskedContent implements ComplexContent {
 				value = newInstance.get(parsedPath.getName());
 			}
 			if (value == null && !elementsSet.contains(parsedPath.getName())) {
-				value = original.get(parsedPath.getName());
+				// only ask the original if it has that field
+				// for example the bean instance will throw a hard error when requesting non-existing fields
+				if (original.getType().get(parsedPath.getName()) != null) {
+					value = original.get(parsedPath.getName());
+				}
 			}
 		}
 		if (value != null) {
