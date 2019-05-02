@@ -18,6 +18,8 @@ import be.nabu.libs.types.api.DefinedSimpleType;
 import be.nabu.libs.types.api.Element;
 import be.nabu.libs.types.api.SimpleType;
 
+// currently we focus on having all edits take place in the new instance, so nothing is "by reference" edited
+// we could make this toggleable so you can still edit the common fields in the original instance?
 public class MaskedContent implements ComplexContent {
 
 	private ComplexContent original, newInstance;
@@ -30,19 +32,69 @@ public class MaskedContent implements ComplexContent {
 		this.targetType = targetType;
 	}
 	
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	private void maskComplexChildren(ComplexContent original, ComplexType targetType) {
+		newInstance = targetType.newInstance();
+		// for all complex children: check if we need to mask the children! they need to be auto converted etc as well
+		for (Element<?> child : TypeUtils.getAllChildren(original.getType())) {
+			if (child.getType() instanceof ComplexType) {
+				// check if the child exists in the target
+				Element<?> element = targetType.get(child.getName());
+				// always mask the values, even if they are the same type
+				// for masked content => you don't want to set values in the original object
+				if (element != null) {
+					Object value = original.get(child.getName());
+					if (value != null) {
+						CollectionHandlerProvider collectionHandler = CollectionHandlerFactory.getInstance().getHandler().getHandler(value.getClass());
+						if (collectionHandler != null) {
+							Collection indexes = collectionHandler.getIndexes(value);
+							Object maskedCollection = collectionHandler.create(value.getClass(), indexes.size());
+							for (Object index : indexes) {
+								Object single = collectionHandler.get(value, index);
+								if (single != null) {
+									if (!(single instanceof ComplexContent)) {
+										single = ComplexContentWrapperFactory.getInstance().getWrapper().wrap(single);
+									}
+									single = new MaskedContent((ComplexContent) single, (ComplexType) element.getType());
+								}
+								collectionHandler.set(maskedCollection, index, single);
+							}
+							newInstance.set(child.getName(), maskedCollection);
+						}
+						else {
+							Object converted = value;
+							if (!(converted instanceof ComplexContent)) {
+								converted = ComplexContentWrapperFactory.getInstance().getWrapper().wrap(converted);
+							}
+							converted = new MaskedContent((ComplexContent) converted, (ComplexType) element.getType());
+							newInstance.set(child.getName(), converted);
+						}
+					}
+					// always add it to elements set, even if null
+					// we don't want to accidently do null first, then create something in the original reference and have it (unmasked) in this instance
+					elementsSet.add(child.getName());
+				}
+			}
+		}
+	}
+	
 	@Override
 	public ComplexType getType() {
 		return targetType;
 	}
 
+	private synchronized void initialize() {
+		if (newInstance == null) {
+			// only mask children on first SET, if we are not updating anything, we can use the original
+			// once you update it however...you are in for some overhead
+			maskComplexChildren(original, targetType);
+		}
+	}
+	
 	@Override
 	public void set(String path, Object value) {
 		if (newInstance == null) {
-			synchronized(this) {
-				if (newInstance == null) {
-					newInstance = targetType.newInstance();
-				}
-			}
+			initialize();
 		}
 		// we actively updated this field, mark it so don't request it from the original anymore
 		elementsSet.add(new ParsedPath(path).getName());
@@ -53,16 +105,25 @@ public class MaskedContent implements ComplexContent {
 	@Override
 	public Object get(String path) {
 		ParsedPath parsedPath = new ParsedPath(path);
+		
+		
 		Element<?> element = targetType.get(parsedPath.getName());
+
+		// in case you are getting a child to perform edits on later, we need to make sure you get a persistent reference
+		if (element != null && element.getType() instanceof ComplexType && newInstance == null) {
+			initialize();
+		}
+		
 		// if we have an element that is not complex but we do want to recurse, throw exception
 		if (element != null && !(element.getType() instanceof ComplexType) && parsedPath.getChildPath() != null) {
-			throw new IllegalArgumentException("Can not get child path of non complex type: " + element.getName());
+			throw new IllegalArgumentException("Can not get child path '" + parsedPath.getChildPath() + "' of non complex type: " + element.getName());
 		}
 		Object value = null;
 		if (element != null || allowUndefinedAccess) {
 			if (newInstance != null) {
 				value = newInstance.get(parsedPath.getName());
 			}
+			// for simple values, we can still get the original
 			if (value == null && !elementsSet.contains(parsedPath.getName())) {
 				// only ask the original if it has that field
 				// for example the bean instance will throw a hard error when requesting non-existing fields
@@ -71,6 +132,7 @@ public class MaskedContent implements ComplexContent {
 				}
 			}
 		}
+		
 		if (value != null) {
 			CollectionHandlerProvider collectionHandler = CollectionHandlerFactory.getInstance().getHandler().getHandler(value.getClass());
 			if (parsedPath.getIndex() != null) {
@@ -80,18 +142,22 @@ public class MaskedContent implements ComplexContent {
 				value = collectionHandler.get(value, collectionHandler.unmarshalIndex(parsedPath.getIndex()));
 			}
 			
+			// if we want a child value, get that
 			if (value != null && parsedPath.getChildPath() != null) {
-				if (collectionHandler != null) {
+				if (collectionHandler != null && parsedPath.getIndex() == null) {
 					throw new IllegalArgumentException("Can not get child of collection without providing an index");
 				}
+				// if it is a complex type, it should have been correctly cast to a complex content by the initialize routine
 				if (!(value instanceof ComplexContent)) {
-					value = ComplexContentWrapperFactory.getInstance().getWrapper().wrap(value);
+					throw new IllegalArgumentException("Not a complex type: " + parsedPath.getName());
 				}
-				value = element == null
-					? ((ComplexContent) value).get(parsedPath.getChildPath().toString())
-					: new MaskedContent((ComplexContent) value, (ComplexType) element.getType()).get(parsedPath.getChildPath().toString());
+				// TODO: this does not allow you undefined access to the original additional children!
+				// this is a change with before and might break stuff? though not sure what?
+				value = ((ComplexContent) value).get(parsedPath.getChildPath().toString());
 			}
-			else if (collectionHandler != null) {
+			// if we have a collection of simple types, we need to cast them
+			// note that a collection of complex types is already cast by the initialize
+			else if (collectionHandler != null && parsedPath.getIndex() == null && element.getType() instanceof SimpleType) {
 				Collection indexes = collectionHandler.getIndexes(value);
 				Object newCollection = collectionHandler.create(value.getClass(), indexes.size());
 				for (Object index : indexes) {
@@ -99,7 +165,8 @@ public class MaskedContent implements ComplexContent {
 				}
 				value = newCollection;
 			}
-			else {
+			// again: non-simple types are cast by the initialize
+			else if (element.getType() instanceof SimpleType) {
 				value = convert(element, value);
 			}
 		}
