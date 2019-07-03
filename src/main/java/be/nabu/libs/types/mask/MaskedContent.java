@@ -166,7 +166,7 @@ public class MaskedContent implements ComplexContent {
 				value = newCollection;
 			}
 			// again: non-simple types are cast by the initialize
-			else if (element.getType() instanceof SimpleType) {
+			else if (element != null && element.getType() instanceof SimpleType) {
 				value = convert(element, value);
 			}
 		}
