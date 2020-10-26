@@ -17,6 +17,7 @@ import be.nabu.libs.types.api.ComplexType;
 import be.nabu.libs.types.api.DefinedSimpleType;
 import be.nabu.libs.types.api.Element;
 import be.nabu.libs.types.api.SimpleType;
+import be.nabu.libs.types.java.BeanType;
 
 // currently we focus on having all edits take place in the new instance, so nothing is "by reference" edited
 // we could make this toggleable so you can still edit the common fields in the original instance?
@@ -43,6 +44,10 @@ public class MaskedContent implements ComplexContent {
 				// always mask the values, even if they are the same type
 				// for masked content => you don't want to set values in the original object
 				if (element != null) {
+					// if the target is a java.lang.Object, don't mask it...
+					if (element.getType() instanceof BeanType && Object.class.equals(((BeanType) element.getType()).getBeanClass())) {
+						continue;
+					}
 					Object value = original.get(child.getName());
 					if (value != null) {
 						CollectionHandlerProvider collectionHandler = CollectionHandlerFactory.getInstance().getHandler().getHandler(value.getClass());
