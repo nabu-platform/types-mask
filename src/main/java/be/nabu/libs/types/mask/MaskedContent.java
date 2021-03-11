@@ -42,7 +42,7 @@ public class MaskedContent implements ComplexContent {
 				// check if the child exists in the target
 				Element<?> element = targetType.get(child.getName());
 				// always mask the values, even if they are the same type
-				// for masked content => you don't want to set values in the original object
+				// for masked content => you don't want to set values in the original object (basically break the "by reference" explicitly)
 				if (element != null) {
 					// if the target is a java.lang.Object, don't mask it...
 					if (element.getType() instanceof BeanType && Object.class.equals(((BeanType) element.getType()).getBeanClass())) {
