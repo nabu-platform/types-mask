@@ -212,4 +212,9 @@ public class MaskedContent implements ComplexContent {
 	public String toString() {
 		return "Masking " + original + " as " + targetType;
 	}
+
+	public ComplexContent getOriginal() {
+		return original;
+	}
+	
 }
