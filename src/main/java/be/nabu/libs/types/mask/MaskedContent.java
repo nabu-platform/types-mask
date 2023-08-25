@@ -2,6 +2,8 @@ package be.nabu.libs.types.mask;
 
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Map;
 import java.util.Set;
 
 import be.nabu.libs.types.BaseTypeInstance;
@@ -50,6 +52,11 @@ public class MaskedContent implements ComplexContent {
 					}
 					Object value = original.get(child.getName());
 					if (value != null) {
+						// @2023-06-28 maps are special, they do have collection handlers but we don't want to use that in this case if we are not mapping to a list at least
+						// in the future we may want to skip the target list search, it is likely better to have a structured object in index 0 than the map exposed as multiple entries
+						if (value instanceof Map && !element.getType().isList(element.getProperties())) {
+							value = ComplexContentWrapperFactory.getInstance().getWrapper().wrap(value);
+						}
 						CollectionHandlerProvider collectionHandler = CollectionHandlerFactory.getInstance().getHandler().getHandler(value.getClass());
 						if (collectionHandler != null) {
 							Collection indexes = collectionHandler.getIndexes(value);
@@ -140,12 +147,29 @@ public class MaskedContent implements ComplexContent {
 		
 		if (value != null) {
 			CollectionHandlerProvider collectionHandler = CollectionHandlerFactory.getInstance().getHandler().getHandler(value.getClass());
+			
+			// @2023-06-29: if we have a collection handler, but we don't have a target list, we want the first element (if any)
+			if (collectionHandler != null && parsedPath.getIndex() == null && element != null && !element.getType().isList(element.getProperties())) {
+				Iterable asIterable = collectionHandler.getAsIterable(value);
+				Iterator iterator = asIterable.iterator();
+				value = iterator.hasNext() ? iterator.next() : null;
+				if (value == null) {
+					return value;
+				}
+				// we have "resolved" the collection, we still want to allow for child access though
+				else {
+					collectionHandler = null;
+				}
+			}
+			
+			
 			if (parsedPath.getIndex() != null) {
 				if (collectionHandler == null) {
 					throw new IllegalArgumentException("Can not find collection handler for: " + value.getClass());
 				}
 				value = collectionHandler.get(value, collectionHandler.unmarshalIndex(parsedPath.getIndex()));
 			}
+			
 			
 			// if we want a child value, get that
 			if (value != null && parsedPath.getChildPath() != null) {
