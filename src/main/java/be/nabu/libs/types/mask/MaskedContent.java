@@ -112,6 +112,11 @@ public class MaskedContent implements ComplexContent {
 		elementsSet.add(new ParsedPath(path).getName());
 		newInstance.set(path, value);
 	}
+	
+	@Override
+	public boolean has(String path) {
+		return newInstance.has(path) || original.has(path);
+	}
 
 	@SuppressWarnings({ "unchecked", "rawtypes" })
 	@Override
