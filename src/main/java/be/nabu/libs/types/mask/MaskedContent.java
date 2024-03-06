@@ -115,7 +115,7 @@ public class MaskedContent implements ComplexContent {
 	
 	@Override
 	public boolean has(String path) {
-		return newInstance.has(path) || original.has(path);
+		return (newInstance != null && newInstance.has(path)) || original.has(path);
 	}
 
 	@SuppressWarnings({ "unchecked", "rawtypes" })
