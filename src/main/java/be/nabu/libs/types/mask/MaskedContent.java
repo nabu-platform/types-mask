@@ -154,7 +154,9 @@ public class MaskedContent implements ComplexContent {
 			CollectionHandlerProvider collectionHandler = CollectionHandlerFactory.getInstance().getHandler().getHandler(value.getClass());
 			
 			// @2023-06-29: if we have a collection handler, but we don't have a target list, we want the first element (if any)
-			if (collectionHandler != null && parsedPath.getIndex() == null && element != null && !element.getType().isList(element.getProperties())) {
+			// @2024-08-12: NOT if we have java.lang.Object!
+			boolean isObject = element.getType() instanceof BeanType && ((BeanType) element.getType()).getBeanClass().equals(java.lang.Object.class);
+			if (collectionHandler != null && parsedPath.getIndex() == null && element != null && !element.getType().isList(element.getProperties()) && !isObject) {
 				Iterable asIterable = collectionHandler.getAsIterable(value);
 				Iterator iterator = asIterable.iterator();
 				value = iterator.hasNext() ? iterator.next() : null;
@@ -172,9 +174,8 @@ public class MaskedContent implements ComplexContent {
 				if (collectionHandler == null) {
 					throw new IllegalArgumentException("Can not find collection handler for: " + value.getClass());
 				}
-				value = collectionHandler.get(value, collectionHandler.unmarshalIndex(parsedPath.getIndex()));
+				value = collectionHandler.get(value, collectionHandler.unmarshalIndex(parsedPath.getIndex(), value));
 			}
-			
 			
 			// if we want a child value, get that
 			if (value != null && parsedPath.getChildPath() != null) {
