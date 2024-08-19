@@ -155,7 +155,7 @@ public class MaskedContent implements ComplexContent {
 			
 			// @2023-06-29: if we have a collection handler, but we don't have a target list, we want the first element (if any)
 			// @2024-08-12: NOT if we have java.lang.Object!
-			boolean isObject = element.getType() instanceof BeanType && ((BeanType) element.getType()).getBeanClass().equals(java.lang.Object.class);
+			boolean isObject = element != null && element.getType() instanceof BeanType && ((BeanType) element.getType()).getBeanClass().equals(java.lang.Object.class);
 			if (collectionHandler != null && parsedPath.getIndex() == null && element != null && !element.getType().isList(element.getProperties()) && !isObject) {
 				Iterable asIterable = collectionHandler.getAsIterable(value);
 				Iterator iterator = asIterable.iterator();
