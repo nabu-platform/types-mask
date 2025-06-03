@@ -132,7 +132,24 @@ public class MaskedContent implements ComplexContent {
 	
 	@Override
 	public boolean has(String path) {
-		return (newInstance != null && newInstance.has(path)) || original.has(path);
+		// @2025-06-02 to better support deletes, we only want to check the newinstance once a specific value has been set, otherwise you could never delete anything in a masked instance that is set underneath which would be different behavior from regular complex contents
+		if (elementsSet.contains(new ParsedPath(path).getName())) {
+			return newInstance.has(path);
+		}
+		else {
+			return original.has(path);
+		}
+//		return (newInstance != null && newInstance.has(path)) || original.has(path);
+	}
+	
+	@Override
+	public void delete(String path) {
+		if (newInstance == null) {
+			initialize();
+		}
+		// we make sure that we know that this field was explicitly set in this masked instance
+		elementsSet.add(new ParsedPath(path).getName());
+		newInstance.delete(path);
 	}
 
 	@SuppressWarnings({ "unchecked", "rawtypes" })
